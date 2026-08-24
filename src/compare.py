@@ -54,9 +54,16 @@ def build_table(runs: dict[str, list[RunMetrics]]) -> str:
     if not algos:
         return "No runs found."
 
+    def final_return(rs: list[RunMetrics]) -> str:
+        # With one seed the interesting spread is across eval episodes; with
+        # several it is across seeds.
+        if len(rs) == 1:
+            return f"{rs[0].final_return_mean:.1f} +/- {rs[0].final_return_std:.1f}"
+        return _agg([r.final_return_mean for r in rs], ".1f")
+
     threshold = runs[algos[0]][0].threshold
     rows = [
-        ("Final return (mean +/- std)", lambda rs: _agg([r.final_return_mean for r in rs], ".1f")),
+        ("Final return (mean +/- std)", final_return),
         (f"Env steps to return >= {threshold:g}", _steps_to_threshold),
         ("Env steps trained", lambda rs: _agg([float(r.total_env_steps) for r in rs], ",.0f")),
         ("Training wall-clock (s)", lambda rs: _agg([r.train_wall_clock_s for r in rs], ".1f")),
@@ -80,28 +87,42 @@ def plot_curves(runs: dict[str, list[RunMetrics]], out_path: Path) -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(7, 4.5))
-    for algo, algo_runs in runs.items():
-        # Seeds may hit eval points at slightly different steps; plot each seed
-        # and label only the first so the legend stays one entry per algorithm.
-        for i, run in enumerate(algo_runs):
-            steps = [p["env_steps"] for p in run.learning_curve]
-            means = [p["return_mean"] for p in run.learning_curve]
-            stds = [p["return_std"] for p in run.learning_curve]
-            ax.plot(steps, means, label=ALGO_LABELS.get(algo, algo) if i == 0 else None)
-            ax.fill_between(
-                steps,
-                np.subtract(means, stds),
-                np.add(means, stds),
-                alpha=0.15,
-            )
+    # When the budgets differ by a lot, a single x-axis squashes the
+    # sample-efficient agent against the origin -- add a zoom panel.
+    budgets = [max(p["env_steps"] for p in r.learning_curve)
+               for rs in runs.values() for r in rs]
+    zoom_limit = min(budgets) if max(budgets) > 5 * min(budgets) else None
+
+    n_panels = 2 if zoom_limit else 1
+    fig, axes = plt.subplots(
+        1, n_panels, figsize=(6 * n_panels, 4.5), sharey=True, squeeze=False
+    )
 
     threshold = next(iter(runs.values()))[0].threshold
-    ax.axhline(threshold, ls="--", c="gray", lw=1, label=f"threshold ({threshold:g})")
-    ax.set_xlabel("environment steps")
-    ax.set_ylabel("episodic return")
-    ax.set_title("Sample efficiency on Pendulum-v1")
-    ax.legend()
+    for panel, ax in enumerate(axes[0]):
+        for algo, algo_runs in runs.items():
+            # Seeds may hit eval points at slightly different steps; plot each
+            # seed and label only the first so the legend has one entry per algo.
+            for i, run in enumerate(algo_runs):
+                steps = [p["env_steps"] for p in run.learning_curve]
+                means = [p["return_mean"] for p in run.learning_curve]
+                stds = [p["return_std"] for p in run.learning_curve]
+                label = ALGO_LABELS.get(algo, algo) if i == 0 else None
+                ax.plot(steps, means, label=label)
+                ax.fill_between(
+                    steps, np.subtract(means, stds), np.add(means, stds), alpha=0.15
+                )
+
+        ax.axhline(threshold, ls="--", c="gray", lw=1, label=f"threshold ({threshold:g})")
+        ax.set_xlabel("environment steps")
+        if panel == 1:
+            ax.set_xlim(0, zoom_limit)
+            ax.set_title(f"zoom: first {zoom_limit:,} steps")
+        else:
+            ax.set_ylabel("episodic return")
+            ax.set_title("Sample efficiency on Pendulum-v1")
+            ax.legend()
+
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150)

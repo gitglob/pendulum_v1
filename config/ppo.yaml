@@ -10,7 +10,7 @@ inherits: base.yaml
 algo: ppo
 
 train:
-  total_timesteps: 100000
+  total_env_steps: 100000
   n_envs: 4
   # Both agents run on the same device so the wall-clock comparison is
   # apples-to-apples. SB3 will warn that a small MlpPolicy often runs faster

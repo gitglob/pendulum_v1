@@ -52,6 +52,13 @@ def log_eval_point(run: Any | None, env_steps: int, mean: float, std: float) -> 
     )
 
 
+def log_scalars(run: Any | None, env_steps: int, values: dict[str, float]) -> None:
+    """Log arbitrary scalars (e.g. model-fit losses) against env steps."""
+    if run is None:
+        return
+    run.log({**values, "env_steps": env_steps}, step=env_steps)
+
+
 def finish_run(run: Any | None, metrics: RunMetrics) -> None:
     """Push the headline metrics into the run summary and close the run."""
     if run is None:

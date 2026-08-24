@@ -11,6 +11,7 @@ env/
 
 # Training artifacts (metrics.json IS committed, models and logs are not)
 *.zip
+*.pt
 *.mp4
 runs/
 wandb/

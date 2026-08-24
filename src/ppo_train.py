@@ -10,7 +10,6 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +20,8 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import VecVideoRecorder
 
-from .config import load_config, resolve_device
+from .cli import build_parser, load_and_override
+from .config import resolve_device
 from .evaluate import benchmark_inference, evaluate, make_env
 from .metrics import PausableTimer, RunMetrics, collect_versions, steps_to_threshold
 from .wandb_utils import finish_run, init_run, log_eval_point
@@ -69,7 +69,7 @@ class CurveCallback(BaseCallback):
 
 
 def train_one_seed(config: dict[str, Any], seed: int) -> RunMetrics:
-    timesteps = config["train"]["total_timesteps"]
+    timesteps = config["train"]["total_env_steps"]
     device = resolve_device(config["train"]["device"])
     threshold = config["benchmark"]["threshold"]
 
@@ -165,52 +165,8 @@ def train_one_seed(config: dict[str, Any], seed: int) -> RunMetrics:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=Path("config/ppo.yaml"))
-    parser.add_argument(
-        "--timesteps", type=int, help="override train.total_timesteps (for smoke tests)"
-    )
-    parser.add_argument("--seeds", type=int, nargs="+", help="override benchmark.seeds")
-    parser.add_argument("--device", help="override train.device")
-    parser.add_argument("--out", type=Path, help="override output.dir")
-    parser.add_argument(
-        "--video-freq", type=int, help="override video.every_env_steps (0 disables)"
-    )
-    parser.add_argument("--no-video", action="store_true", help="disable video capture")
-    parser.add_argument(
-        "--watch",
-        action="store_true",
-        help="open a live window and render the evaluation episodes as training goes",
-    )
-    parser.add_argument(
-        "--eval-freq", type=int, help="override eval.freq_env_steps"
-    )
-    parser.add_argument(
-        "--eval-episodes", type=int, help="override eval.curve_episodes"
-    )
-    parser.add_argument("--no-wandb", action="store_true", help="disable wandb logging")
-    args = parser.parse_args()
-
-    config = load_config(args.config)
-    if args.timesteps is not None:
-        config["train"]["total_timesteps"] = args.timesteps
-    if args.device is not None:
-        config["train"]["device"] = args.device
-    if args.out is not None:
-        config["output"]["dir"] = str(args.out)
-    if args.video_freq is not None:
-        config["video"]["every_env_steps"] = args.video_freq
-    if args.no_video:
-        config["video"]["enabled"] = False
-    if args.watch:
-        config["eval"]["render"] = True
-    if args.eval_freq is not None:
-        config["eval"]["freq_env_steps"] = args.eval_freq
-    if args.eval_episodes is not None:
-        config["eval"]["curve_episodes"] = args.eval_episodes
-    if args.no_wandb:
-        config["wandb"]["enabled"] = False
-
+    args = build_parser(__doc__, "config/ppo.yaml").parse_args()
+    config = load_and_override(args)
     for seed in args.seeds or config["benchmark"]["seeds"]:
         train_one_seed(config, seed)
 

@@ -1,0 +1,43 @@
+# PETS: probabilistic ensemble + CEM model-predictive control.
+#
+# The model-based agent this project reports on. Only the dynamics are learned;
+# planning uses Pendulum's known analytic reward (see src/planner.py).
+
+inherits: base.yaml
+
+algo: pets
+
+train:
+  total_env_steps: 4000
+  warmup_steps: 200     # uniform-random steps before the first model fit
+  device: cuda
+
+model:
+  ensemble_size: 5
+  hidden_layers: [200, 200]
+  lr: 0.001
+  weight_decay: 0.00005
+  batch_size: 256
+  epochs_per_retrain: 50
+  holdout_ratio: 0.1
+
+planner:
+  horizon: 15
+  popsize: 500
+  elites: 50
+  iters: 5
+  alpha: 0.1            # momentum when refitting the CEM distribution
+  n_particles: 20       # must be a multiple of ensemble_size
+  warm_start: true      # reuse the previous step's plan, shifted by one
+
+eval:
+  # PETS spends its whole budget in ~4k steps, so the curve is sampled every
+  # episode. Everything else about evaluation is inherited from base.yaml and
+  # therefore identical to PPO's protocol.
+  freq_env_steps: 200
+
+video:
+  every_episodes: 5
+
+output:
+  dir: results/pets
