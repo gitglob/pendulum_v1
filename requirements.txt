@@ -1,0 +1,8 @@
+gymnasium[classic-control]>=0.29
+stable-baselines3>=2.3
+torch>=2.2
+wandb>=0.16
+pyyaml>=6.0
+matplotlib>=3.5
+moviepy>=1.0            # required by SB3's VecVideoRecorder
+imageio-ffmpeg>=0.4

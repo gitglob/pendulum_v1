@@ -1,0 +1,33 @@
+# Model-free PPO baseline (stable-baselines3).
+#
+# Hyperparameters are the tuned rl-baselines3-zoo values for Pendulum-v1
+# (hyperparams/ppo.yml), used unmodified so the model-based agent is compared
+# against a fair standard PPO rather than a strawman. The zoo uses no
+# observation normalization for this env.
+
+inherits: base.yaml
+
+algo: ppo
+
+train:
+  total_timesteps: 100000
+  n_envs: 4
+  # Both agents run on the same device so the wall-clock comparison is
+  # apples-to-apples. SB3 will warn that a small MlpPolicy often runs faster
+  # on cpu; the device actually used is recorded in metrics.json.
+  device: cuda
+
+hyperparams:
+  policy: MlpPolicy
+  n_steps: 1024
+  gae_lambda: 0.95
+  gamma: 0.9
+  n_epochs: 10
+  ent_coef: 0.0
+  learning_rate: 0.001
+  clip_range: 0.2
+  use_sde: true
+  sde_sample_freq: 4
+
+output:
+  dir: results/ppo

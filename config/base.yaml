@@ -1,0 +1,43 @@
+# Settings shared by every algorithm. Both the model-free (PPO) and the
+# model-based (PETS) runs inherit this file, which is what makes the reported
+# metrics comparable: same env, same eval protocol, same "solved" bar.
+
+env:
+  id: Pendulum-v1
+
+benchmark:
+  # Mean eval return counted as "solved". Pendulum-v1 has no official
+  # threshold; -200 is the commonly used bar.
+  threshold: -200.0
+  seeds: [0]
+
+eval:
+  # Eval episodes are seeded with seed_offset + seed + episode_index, so every
+  # algorithm and every eval point faces the same initial states, and those
+  # states are disjoint from the ones used for training.
+  seed_offset: 10000
+  freq_env_steps: 2000   # env steps between learning-curve points
+  curve_episodes: 5      # episodes per learning-curve point
+  final_episodes: 20     # episodes behind the reported final return
+  render: false          # true -> watch evaluation episodes live in a window
+
+inference:
+  n_actions: 1000
+  warmup: 50
+
+video:
+  # SB3's VecVideoRecorder wraps the training env. Note that rendering happens
+  # inside model.learn(), so it counts towards train_wall_clock_s -- use
+  # --no-video for the runs whose timings you report.
+  enabled: true
+  every_env_steps: 20000   # 0 disables
+  length: 200              # frames per clip (one Pendulum episode)
+
+wandb:
+  enabled: true
+  project: pendulum-v1-mbrl
+  entity: null           # null -> your default wandb entity
+  mode: online           # online | offline | disabled
+
+output:
+  root: results
