@@ -19,6 +19,20 @@ from .obs import apply_pixel_wrappers, is_pixels, render_mode_for
 ActFn = Callable[[np.ndarray], np.ndarray]
 
 
+def reset_agent(act_fn: ActFn) -> None:
+    """Tell a stateful agent a fresh episode is starting, if it cares.
+
+    Some agents carry state between steps -- Dreamer's recurrent latent, PETS'
+    warm-started plan -- and leaking it across an episode boundary is a
+    correctness bug, not a rounding error. Agents that need the signal expose a
+    `reset()`; a plain policy lambda does not, and is left alone. Keeping the
+    hook optional is what lets every agent share this one measurement path.
+    """
+    reset = getattr(act_fn, "reset", None)
+    if callable(reset):
+        reset()
+
+
 def make_env(config: dict[str, Any], render_mode: str | None = None) -> gym.Env:
     """Build the env with the observation the config asks for.
 
@@ -50,6 +64,7 @@ def evaluate(
     returns: list[float] = []
     for i in range(n_episodes):
         obs, _ = env.reset(seed=seed_offset + seed + i)
+        reset_agent(act_fn)
         done = False
         total = 0.0
         while not done:
@@ -77,10 +92,12 @@ def benchmark_inference(
     warmup = config["inference"]["warmup"]
 
     obs, _ = env.reset(seed=config["eval"]["seed_offset"] + seed)
+    reset_agent(act_fn)
     for _ in range(warmup):
         obs, _, terminated, truncated, _ = env.step(act_fn(obs))
         if terminated or truncated:
             obs, _ = env.reset()
+            reset_agent(act_fn)
 
     latencies_ms: list[float] = []
     for _ in range(n_actions):
@@ -91,6 +108,7 @@ def benchmark_inference(
         obs, _, terminated, truncated, _ = env.step(action)
         if terminated or truncated:
             obs, _ = env.reset()
+            reset_agent(act_fn)
 
     latencies = np.asarray(latencies_ms)
     return {

@@ -25,6 +25,7 @@ ALGO_LABELS = {
     ("pets", "state"): "PETS (state)",
     ("ppo", "state"): "PPO (state)",
     ("pets", "pixels"): "PETS (pixels)",
+    ("dreamer", "pixels"): "DreamerV3 (pixels)",
     ("ppo", "pixels"): "PPO (pixels)",
 }
 Key = tuple[str, str]

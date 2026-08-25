@@ -1,16 +1,18 @@
-# Model-based RL on Pendulum-v1 (PETS)
+# Model-based RL on Pendulum-v1
 
-A small, self-contained implementation of **PETS** — a probabilistic dynamics
-ensemble planned through with **CEM model-predictive control** — solving
-`Pendulum-v1`. A tuned **PPO** baseline is included purely as a yardstick, to
-put the model-based agent's numbers in context on five metrics.
+Small, self-contained implementations of two model-based agents solving
+`Pendulum-v1` — **PETS** (a probabilistic dynamics ensemble planned through with
+CEM model-predictive control) and **DreamerV3** (a recurrent world model with an
+actor-critic trained purely in imagination) — from either the state vector or
+raw pixels. A tuned **PPO** baseline is included purely as a yardstick, to put
+the model-based numbers in context on five metrics.
 
-## The method
+## PETS: the method
 
 PETS never learns a policy. It learns *what the world does*, then searches for a
 good action at every step.
 
-**1. The model** ([src/dynamics.py](src/dynamics.py)) — an ensemble of 5 MLPs.
+**1. The model** ([src/pets/dynamics.py](src/pets/dynamics.py)) — an ensemble of 5 MLPs.
 Each takes `(observation, action)` and outputs a **Gaussian over the observation
 delta**: a mean and a log-variance, so a member expresses how uncertain it is
 about its own prediction. Members are trained by Gaussian negative log-likelihood,
@@ -21,7 +23,7 @@ training from diverging early on. All 5 members live in batched weight tensors
 (`[members, in, out]`, applied with `baddbmm`) and are evaluated in a single pass,
 because the planner queries the model tens of times per action.
 
-**2. The planner** ([src/planner.py](src/planner.py)) — CEM over open-loop action
+**2. The planner** ([src/pets/planner.py](src/pets/planner.py)) — CEM over open-loop action
 sequences. Each iteration samples 500 candidate sequences of length 15 from a
 diagonal Gaussian, scores each one by rolling it out through the model, keeps the
 50 best, and refits the distribution to those elites (with momentum). After 5
@@ -30,7 +32,7 @@ search runs again from the next state. Each candidate is scored under **20
 particles** spread across all 5 ensemble members, so a plan that only works if
 one member is right gets penalised.
 
-**3. Training loop** ([src/pets_train.py](src/pets_train.py)) — 200 steps of
+**3. Training loop** ([src/pets/train.py](src/pets/train.py)) — 200 steps of
 random exploration, then repeat: refit the ensemble on everything collected so
 far, run one episode with CEM choosing every action, keep the transitions.
 
@@ -42,7 +44,7 @@ reward head would be the honest next step for a from-scratch claim.
 
 ## Results — from state
 
-Seed 0, threshold −200, both agents on one RTX 3090, measured by identical code.
+Seed 0, threshold −200, one RTX 3090, every run measured by identical code.
 
 | Metric | PETS (model-based) | PPO (model-free) |
 | --- | --- | --- |
@@ -54,8 +56,8 @@ Seed 0, threshold −200, both agents on one RTX 3090, measured by identical cod
 
 ![Sample efficiency](results/learning_curves.png)
 
-*(The figure carries all four runs — state and pixels, both algorithms. The
-right panel zooms to the first 15,000 steps.)*
+*(The figure carries all five runs — PETS, DreamerV3 and PPO, from state and
+from pixels. The right panel zooms to the first 50,000 steps.)*
 
 **PETS reaches the threshold in 600 environment steps — 41× fewer than PPO's
 24,600** — and ends slightly ahead on return. The curve shows why: two random
@@ -78,14 +80,14 @@ such as anything that must run at control rates.
 
 ## Learning from pixels
 
-Both agents also run on **visual input**: `--obs-type pixels` replaces the state
+All three agents also run on **visual input**: `--obs-type pixels` replaces the state
 vector with a stack of **3 rendered frames** (64×64 grayscale). Three is the
 minimum that makes the task solvable — one frame fixes the angle, two are needed
 for angular velocity, three for angular acceleration.
 
 PPO needs nothing but `CnnPolicy`. PETS needs a space to plan *in*, because
 imagining 150,000 frames per action is hopeless and pixels do not hand over the
-angle the analytic reward wants. So [src/encoder.py](src/encoder.py) learns one:
+angle the analytic reward wants. So [src/pets/encoder.py](src/pets/encoder.py) learns one:
 a conv autoencoder compresses the frame stack to a 32-d latent, the **existing**
 ensemble learns latent dynamics, and a small head learns the reward from the
 rewards the environment already returns. Nothing reads the simulator state, so
@@ -103,41 +105,77 @@ predict it):
 | Jittered latents when training the heads | The reward head was excellent on true latents but off by >2 on latents three model-steps old |
 | Multi-step (`rollout_horizon`) training | The planner cares about compounded error, not one-step error |
 
-| Metric | PETS (pixels) | PPO (pixels) |
-| --- | --- | --- |
-| Final return (20 eval episodes) | −129.5 ± 89.7 | **−125.7 ± 87.2** |
-| **Env steps to return ≥ −200** | **9,000** | 50,000 |
-| Env steps trained | 15,000 | 301,056 |
-| Training wall-clock | **870 s** | 1057 s |
-| Inference per action | 39.1 ms | **0.739 ms** |
+| Metric | PETS (pixels) | DreamerV3 (pixels) | PPO (pixels) |
+| --- | --- | --- | --- |
+| Final return (20 eval episodes) | −129.5 ± 89.7 | −212.8 ± 212.6 | **−125.7 ± 87.2** |
+| **Env steps to return ≥ −200** | **9,000** | 18,000 | 50,000 |
+| Env steps trained | 15,000 | 50,000 | 301,056 |
+| Training wall-clock | **870 s** | 6303 s | 1057 s |
+| Inference per action | 39.1 ms | 2.04 ms | **0.739 ms** |
 
-**The model-based advantage survives the move to vision: 5.6× fewer environment
-steps to threshold** (9,000 vs 50,000), and the two end up statistically
-indistinguishable on final return. The advantage is smaller than the 41× seen
-from state, which is the honest cost of having to learn the representation as
-well as the dynamics. The inference gap is unchanged — CEM still searches at
-every step.
+**The model-based advantage survives the move to vision: PETS needs 5.6× fewer
+environment steps to threshold** (9,000 vs 50,000), and the two end up
+statistically indistinguishable on final return. The advantage is smaller than
+the 41× seen from state, which is the honest cost of having to learn the
+representation as well as the dynamics.
 
 Worth noting from the figure: PPO-from-pixels **collapses** around 150k steps,
 falling back to ≈ −950 before recovering by 180k. PETS shows no such
 instability; once its model is good, planning keeps working.
 
+## DreamerV3
+
+[src/dreamer/](src/dreamer/) is a faithful implementation of the paper's core:
+a **recurrent state-space model** (32 × 32 categorical latents with 1% unimix
+and straight-through gradients, over a GRU), **symlog** transforms, **twohot**
+reward and value heads so both are classification rather than regression, the
+two-sided KL with **free bits** (β_dyn 0.5, β_rep 0.1), and an actor-critic
+trained **entirely on imagined rollouts** (horizon 15, γ 0.997, λ 0.95) with an
+EMA slow critic and return/advantage normalisation. Hyperparameters follow the
+paper, checked against `danijar/dreamerv3` — whose public config has since moved
+on from it (`deter: 8192`, a single 4e-5 lr, AGC clipping).
+
+Dreamer sits between the other two by design. Like PETS it learns a model, so it
+is sample-efficient; unlike PETS it *distils* the model into a feed-forward
+policy, so acting costs one forward pass rather than a search:
+
+- **Sample efficiency:** crosses −200 at **18,000** steps — half of PPO's
+  50,000, though twice PETS' 9,000.
+- **Inference: 2.04 ms**, ~19× faster than PETS' CEM search (39.1 ms) and within
+  3× of raw PPO (0.74 ms). This is the trade Dreamer is *for*.
+- **Wall-clock: 6303 s**, by far the most expensive — it trains a world model,
+  an actor and a critic on 16 × 64 sequences every other env step.
+
+**The final-return number deserves an explicit caveat.** Dreamer's learning
+curve sits at ≈ −123 for its last 25k steps, but its 20-episode final return is
+**−212.8 ± 212.6**. That spread is the finding: the policy is near-optimal from
+most initial states and fails from a few, and the 20-episode final metric samples
+more of those than the 5-episode curve points do. So Dreamer here is *less
+reliable* than PETS or PPO despite a comparable typical episode — visible in the
+figure as the spikes at 22k and 38k. More seeds and a longer budget would be the
+way to pin that down.
+
 ## Setup and running
 
 ```bash
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m src.pets_train --no-video                     # PETS, state
-.venv/bin/python -m src.ppo_train  --no-video                     # PPO, state
-.venv/bin/python -m src.pets_train --obs-type pixels --no-video   # PETS, pixels
-.venv/bin/python -m src.ppo_train  --obs-type pixels --no-video   # PPO, pixels
-.venv/bin/python -m src.compare --plot          # rebuild the table and figure
+.venv/bin/python -m src.pets.train --no-video                     # PETS, state
+.venv/bin/python -m src.ppo.train  --no-video                     # PPO, state
+.venv/bin/python -m src.pets.train --obs-type pixels --no-video   # PETS, pixels
+.venv/bin/python -m src.ppo.train  --obs-type pixels --no-video   # PPO, pixels
+.venv/bin/python -m src.dreamer.train --no-video                  # DreamerV3, pixels
+.venv/bin/python -m src.common.compare --plot   # rebuild the table and figure
 ```
 
+Shared code lives in `src/common/` (config/CLI, the `RunMetrics` schema, the
+observation pipeline, evaluation and the latency benchmark); each algorithm is a
+package beside it.
+
 Run from the repo root. Every setting lives in `config/*.yaml`
-(`config/pets.yaml` and `config/ppo.yaml` both `inherit: base.yaml`, which is
+(each algo config `inherits: base.yaml`, which is
 where the shared evaluation protocol is defined, and each carries a `pixels:`
 block that `--obs-type pixels` merges over the defaults); the CLI flags in
-[src/cli.py](src/cli.py) are just per-run overrides of those keys. Results land
+[src/common/cli.py](src/common/cli.py) are just per-run overrides of those keys. Results land
 in `results/<algo>/<obs_type>/seed<n>/`. Training curves go to Weights & Biases
 (`--no-wandb` to disable).
 
@@ -148,7 +186,7 @@ into `results/<algo>/seed<n>/videos/`, which wandb uploads automatically.
 
 ## How the comparison is kept fair
 
-- Both agents are evaluated by the same code ([src/evaluate.py](src/evaluate.py))
+- Both agents are evaluated by the same code ([src/common/evaluate.py](src/common/evaluate.py))
   on the same eval seeds, so they face identical initial states, and both write
   the same `metrics.json` schema.
 - Sample efficiency is counted in **real environment steps**. PETS' imagined
@@ -165,15 +203,16 @@ into `results/<algo>/seed<n>/videos/`, which wandb uploads automatically.
 - **One seed (0).** The 41× sample-efficiency gap is far too large to be noise,
   but the 17-point final-return difference is well inside the ±87–99 spread
   across eval episodes — read it as "comparable", not "PETS wins".
-- **Both agents on the same RTX 3090**, which is not PPO's fastest setup — SB3
+- **Every agent on the same RTX 3090**, which is not PPO's fastest setup — SB3
   recommends CPU for small MLPs. Same device was chosen so the wall-clock and
   latency columns compare like with like.
 - **Timed runs were run sequentially on an otherwise idle GPU.** An earlier pass
-  that ran both concurrently inflated PPO's training time from 73.7 s to 201.4 s;
-  co-tenancy distorts these two metrics badly.
+  that ran two concurrently inflated PPO's training time from 73.7 s to 201.4 s;
+  co-tenancy distorts wall-clock and latency badly.
 - Curves are sampled every 200 env steps for the state runs; the pixel runs use
-  a coarser cadence (1,000 for PETS, 10,000 for PPO) because every eval step
-  also pays ~3 ms of rendering.
+  a coarser cadence (1,000 PETS, 2,000 Dreamer, 10,000 PPO) because every eval
+  step also pays ~3 ms of rendering. Curve points use 5 episodes, the reported
+  final return 20 — which is why Dreamer's curve and final number disagree.
 - The **known-reward assumption** applies to the *state* agent only: it plans
   with Pendulum's analytic reward and learns just the dynamics. The pixel agent
   learns its reward too, from the rewards the env returns.

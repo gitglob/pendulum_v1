@@ -1,0 +1,72 @@
+# DreamerV3 from pixels: a learned world model, with an actor-critic trained
+# entirely on trajectories imagined inside it.
+#
+# Values follow the DreamerV3 paper (arXiv 2301.04104), cross-checked against
+# danijar/dreamerv3's configs.yaml, at a model size suited to Pendulum. Note the
+# public repo has since diverged from the paper (it now defaults to deter 8192,
+# a single lr of 4e-5 and AGC clipping); this follows the paper.
+
+inherits: base.yaml
+
+algo: dreamer
+
+obs:
+  # Dreamer here is a pixel agent: --obs-type state would need an MLP
+  # encoder/decoder and is rejected with a clear message.
+  type: pixels
+
+train:
+  total_env_steps: 50000
+  # Random actions before training starts, to seed the replay buffer.
+  warmup_steps: 1000
+  # Replayed steps per env step. One gradient step covers
+  # batch_size * batch_length = 1024 replayed steps, so 512 means one gradient
+  # step every two env steps.
+  train_ratio: 512
+  batch_size: 16
+  batch_length: 64
+  device: cuda
+
+dreamer:
+  # --- world model ---
+  deter: 512              # GRU recurrent state
+  stoch: 32               # categorical variables ...
+  classes: 32             # ... each over this many classes
+  unimix: 0.01            # uniform floor mixed into every categorical
+  cnn_depth: 32
+  units: 512              # width of every MLP head
+  layers: 2
+  bins: 255               # twohot grid for reward and value
+  bin_limit: 20.0         # grid spans +-20 in symlog space
+  free_bits: 1.0          # KL below this is not penalised
+  beta_dynamics: 0.5      # weight on the prior-towards-posterior KL
+  beta_representation: 0.1  # weight on the posterior-towards-prior KL
+  # --- actor-critic (trained only in imagination) ---
+  imagination_horizon: 15
+  discount: 0.997
+  lambda: 0.95
+  entropy_scale: 0.0003
+  min_std: 0.1
+  slow_critic_rate: 0.02  # EMA rate of the target critic
+  return_ema_rate: 0.01   # EMA rate of the return-percentile range
+  advantage_ema_rate: 0.01  # EMA rate of the advantage mean/scale
+  # Output layers start near zero so the actor's tanh does not begin saturated
+  # (a saturated tanh has no gradient, and the policy never recovers).
+  actor_out_scale: 0.01
+  # --- optimisation ---
+  model_lr: 0.0001
+  actor_lr: 0.00003
+  critic_lr: 0.00003
+  adam_eps: 0.00000001
+  grad_clip: 100.0
+
+eval:
+  # Every eval step pays the render cost, so sample the curve less often than
+  # the state agents do.
+  freq_env_steps: 2000
+
+video:
+  every_episodes: 25
+
+output:
+  dir: results/dreamer

@@ -1,0 +1,198 @@
+{
+  "algo": "dreamer",
+  "env_id": "Pendulum-v1",
+  "seed": 0,
+  "device": "cuda",
+  "obs_type": "pixels",
+  "total_env_steps": 50000,
+  "threshold": -200.0,
+  "env_steps_to_threshold": 18000,
+  "train_wall_clock_s": 6303.013282448053,
+  "eval_wall_clock_s": 125.6096428395249,
+  "final_return_mean": -212.80188772230386,
+  "final_return_std": 212.60756865088163,
+  "final_return_episodes": 20,
+  "inference_ms_per_action": {
+    "mean": 2.0428040460683405,
+    "median": 2.027275040745735,
+    "p95": 2.1572093712165947,
+    "n_actions": 1000
+  },
+  "learning_curve": [
+    {
+      "env_steps": 0,
+      "return_mean": -1029.0400914110396,
+      "return_std": 292.27041131240446
+    },
+    {
+      "env_steps": 2000,
+      "return_mean": -1340.5627473142831,
+      "return_std": 26.216891545041726
+    },
+    {
+      "env_steps": 4000,
+      "return_mean": -1290.8784784692707,
+      "return_std": 145.12584430412588
+    },
+    {
+      "env_steps": 6000,
+      "return_mean": -1052.353019646695,
+      "return_std": 234.70246598824903
+    },
+    {
+      "env_steps": 8000,
+      "return_mean": -844.3695204847481,
+      "return_std": 326.21945442425476
+    },
+    {
+      "env_steps": 10000,
+      "return_mean": -801.0613265136906,
+      "return_std": 341.2125386462499
+    },
+    {
+      "env_steps": 12000,
+      "return_mean": -371.09625148095597,
+      "return_std": 557.8008023491059
+    },
+    {
+      "env_steps": 14000,
+      "return_mean": -372.03369440423296,
+      "return_std": 558.3371822603508
+    },
+    {
+      "env_steps": 16000,
+      "return_mean": -1397.2662511112078,
+      "return_std": 110.2558618668864
+    },
+    {
+      "env_steps": 18000,
+      "return_mean": -127.00364470542418,
+      "return_std": 80.1170162423289
+    },
+    {
+      "env_steps": 20000,
+      "return_mean": -1257.766542180445,
+      "return_std": 233.5961557808592
+    },
+    {
+      "env_steps": 22000,
+      "return_mean": -597.7330283517058,
+      "return_std": 395.72802559737244
+    },
+    {
+      "env_steps": 24000,
+      "return_mean": -145.1690089264171,
+      "return_std": 116.93227326830464
+    },
+    {
+      "env_steps": 26000,
+      "return_mean": -123.45591794424038,
+      "return_std": 78.50828782684562
+    },
+    {
+      "env_steps": 28000,
+      "return_mean": -147.8923010928201,
+      "return_std": 119.70122226788938
+    },
+    {
+      "env_steps": 30000,
+      "return_mean": -124.33829373945358,
+      "return_std": 77.98539267016201
+    },
+    {
+      "env_steps": 32000,
+      "return_mean": -124.35854531037982,
+      "return_std": 78.29780455329814
+    },
+    {
+      "env_steps": 34000,
+      "return_mean": -122.52667796028145,
+      "return_std": 77.66350310287625
+    },
+    {
+      "env_steps": 36000,
+      "return_mean": -124.57687960291393,
+      "return_std": 78.17846052051688
+    },
+    {
+      "env_steps": 38000,
+      "return_mean": -312.776776804906,
+      "return_std": 278.060008766102
+    },
+    {
+      "env_steps": 40000,
+      "return_mean": -98.22543775757805,
+      "return_std": 48.43544875289867
+    },
+    {
+      "env_steps": 42000,
+      "return_mean": -124.06310556981114,
+      "return_std": 79.47178894177848
+    },
+    {
+      "env_steps": 44000,
+      "return_mean": -123.14659457593787,
+      "return_std": 78.29196438343713
+    },
+    {
+      "env_steps": 46000,
+      "return_mean": -123.07360957532121,
+      "return_std": 78.03108643051938
+    },
+    {
+      "env_steps": 48000,
+      "return_mean": -123.39249580717407,
+      "return_std": 78.1634134264203
+    },
+    {
+      "env_steps": 50000,
+      "return_mean": -123.39932459365036,
+      "return_std": 78.28638021977729
+    }
+  ],
+  "hyperparams": {
+    "deter": 512,
+    "stoch": 32,
+    "classes": 32,
+    "unimix": 0.01,
+    "cnn_depth": 32,
+    "units": 512,
+    "layers": 2,
+    "bins": 255,
+    "bin_limit": 20.0,
+    "free_bits": 1.0,
+    "beta_dynamics": 0.5,
+    "beta_representation": 0.1,
+    "imagination_horizon": 15,
+    "discount": 0.997,
+    "lambda": 0.95,
+    "entropy_scale": 0.0003,
+    "min_std": 0.1,
+    "slow_critic_rate": 0.02,
+    "return_ema_rate": 0.01,
+    "advantage_ema_rate": 0.01,
+    "actor_out_scale": 0.01,
+    "model_lr": 0.0001,
+    "actor_lr": 3e-05,
+    "critic_lr": 3e-05,
+    "adam_eps": 1e-08,
+    "grad_clip": 100.0,
+    "total_env_steps": 50000,
+    "warmup_steps": 1000,
+    "train_ratio": 512,
+    "batch_size": 16,
+    "batch_length": 64,
+    "device": "cuda",
+    "type": "pixels",
+    "image_size": 64,
+    "grayscale": true,
+    "frame_stack": 3
+  },
+  "versions": {
+    "python": "3.10.12",
+    "torch": "2.13.0+cu130",
+    "gymnasium": "1.3.0",
+    "stable_baselines3": "2.9.0",
+    "numpy": "2.2.6"
+  }
+}

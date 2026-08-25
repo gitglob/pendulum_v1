@@ -27,8 +27,8 @@ import gymnasium as gym
 import numpy as np
 import torch
 
-from .cli import build_parser, load_and_override
-from .config import resolve_device
+from ..common.cli import build_parser, load_and_override
+from ..common.config import resolve_device
 from .dynamics import ProbabilisticEnsemble, train_model
 from .encoder import (
     ConvAutoencoder,
@@ -37,11 +37,11 @@ from .encoder import (
     to_float,
     train_encoder,
 )
-from .evaluate import benchmark_inference, evaluate, make_env
-from .metrics import PausableTimer, RunMetrics, collect_versions, steps_to_threshold
-from .obs import apply_pixel_wrappers, is_pixels, render_mode_for
+from ..common.evaluate import benchmark_inference, evaluate, make_env
+from ..common.metrics import PausableTimer, RunMetrics, collect_versions, steps_to_threshold
+from ..common.obs import apply_pixel_wrappers, is_pixels, render_mode_for
 from .planner import CEMPlanner, pendulum_reward
-from .wandb_utils import finish_run, init_run, log_eval_point, log_scalars
+from ..common.wandb_utils import finish_run, init_run, log_eval_point, log_scalars
 
 
 class StateRepresentation:
@@ -197,8 +197,20 @@ def train_one_seed(config: dict[str, Any], seed: int) -> RunMetrics:
     # Marks episode ends so rollout training never unrolls across a reset.
     buf_done = np.zeros(total_steps, dtype=bool)
 
-    def act_fn(obs: np.ndarray) -> np.ndarray:
-        return planner.plan(representation.encode(obs))
+    class PlannerAgent:
+        """Callable policy that also forgets its warm-started plan on reset.
+
+        The shared harness calls `reset()` at every episode start, so CEM no
+        longer begins a fresh episode from the previous one's stale solution.
+        """
+
+        def __call__(self, obs: np.ndarray) -> np.ndarray:
+            return planner.plan(representation.encode(obs))
+
+        def reset(self) -> None:
+            planner.reset()
+
+    act_fn = PlannerAgent()
 
     learning_curve: list[dict[str, float]] = []
     timer = PausableTimer()
