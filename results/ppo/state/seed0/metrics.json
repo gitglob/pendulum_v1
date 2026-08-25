@@ -3,6 +3,7 @@
   "env_id": "Pendulum-v1",
   "seed": 0,
   "device": "cuda",
+  "obs_type": "state",
   "total_env_steps": 102400,
   "threshold": -200.0,
   "env_steps_to_threshold": 24600,

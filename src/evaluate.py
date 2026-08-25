@@ -14,11 +14,20 @@ from typing import Any, Callable
 import gymnasium as gym
 import numpy as np
 
+from .obs import apply_pixel_wrappers, is_pixels, render_mode_for
+
 ActFn = Callable[[np.ndarray], np.ndarray]
 
 
 def make_env(config: dict[str, Any], render_mode: str | None = None) -> gym.Env:
-    return gym.make(config["env"]["id"], render_mode=render_mode)
+    """Build the env with the observation the config asks for.
+
+    Under `obs.type: pixels` the observation is a stack of rendered frames, so
+    `render_mode` is forced to "rgb_array" and a request for a live window
+    cannot be honoured.
+    """
+    env = gym.make(config["env"]["id"], render_mode=render_mode_for(config, render_mode))
+    return apply_pixel_wrappers(env, config) if is_pixels(config) else env
 
 
 def evaluate(

@@ -40,7 +40,7 @@ from the observation via `atan2` and verified to match the environment to float3
 precision. This is the standard setup for PETS on these benchmarks; a learned
 reward head would be the honest next step for a from-scratch claim.
 
-## Results
+## Results — from state
 
 Seed 0, threshold −200, both agents on one RTX 3090, measured by identical code.
 
@@ -53,6 +53,9 @@ Seed 0, threshold −200, both agents on one RTX 3090, measured by identical cod
 | Inference per action | 30.9 ms | **0.429 ms** |
 
 ![Sample efficiency](results/learning_curves.png)
+
+*(The figure carries all four runs — state and pixels, both algorithms. The
+right panel zooms to the first 15,000 steps.)*
 
 **PETS reaches the threshold in 600 environment steps — 41× fewer than PPO's
 24,600** — and ends slightly ahead on return. The curve shows why: two random
@@ -73,20 +76,70 @@ compute.** It wins where environment steps are the scarce resource — real robo
 expensive simulators — and loses where wall-clock or per-action latency matters,
 such as anything that must run at control rates.
 
+## Learning from pixels
+
+Both agents also run on **visual input**: `--obs-type pixels` replaces the state
+vector with a stack of **3 rendered frames** (64×64 grayscale). Three is the
+minimum that makes the task solvable — one frame fixes the angle, two are needed
+for angular velocity, three for angular acceleration.
+
+PPO needs nothing but `CnnPolicy`. PETS needs a space to plan *in*, because
+imagining 150,000 frames per action is hopeless and pixels do not hand over the
+angle the analytic reward wants. So [src/encoder.py](src/encoder.py) learns one:
+a conv autoencoder compresses the frame stack to a 32-d latent, the **existing**
+ensemble learns latent dynamics, and a small head learns the reward from the
+rewards the environment already returns. Nothing reads the simulator state, so
+this is genuinely learned from pixels.
+
+Getting that to plan took four things, each of which was measured rather than
+guessed (the diagnostic that matters is the **correlation between predicted and
+true return over the planning horizon** — one-step prediction error does not
+predict it):
+
+| Fix | Why |
+| --- | --- |
+| Latent-prediction loss (`TransitionHead`) | Reconstruction gives the encoder no reason to make the latent *predictable*; adding it cut one-step latent error 158× |
+| LayerNorm on the latent + projection in rollouts | Predicted latents drifted off-manifold: rollout error grew to ~3500 by 15 steps, and projection bounded it to 0.34 |
+| Jittered latents when training the heads | The reward head was excellent on true latents but off by >2 on latents three model-steps old |
+| Multi-step (`rollout_horizon`) training | The planner cares about compounded error, not one-step error |
+
+| Metric | PETS (pixels) | PPO (pixels) |
+| --- | --- | --- |
+| Final return (20 eval episodes) | −129.5 ± 89.7 | **−125.7 ± 87.2** |
+| **Env steps to return ≥ −200** | **9,000** | 50,000 |
+| Env steps trained | 15,000 | 301,056 |
+| Training wall-clock | **870 s** | 1057 s |
+| Inference per action | 39.1 ms | **0.739 ms** |
+
+**The model-based advantage survives the move to vision: 5.6× fewer environment
+steps to threshold** (9,000 vs 50,000), and the two end up statistically
+indistinguishable on final return. The advantage is smaller than the 41× seen
+from state, which is the honest cost of having to learn the representation as
+well as the dynamics. The inference gap is unchanged — CEM still searches at
+every step.
+
+Worth noting from the figure: PPO-from-pixels **collapses** around 150k steps,
+falling back to ≈ −950 before recovering by 180k. PETS shows no such
+instability; once its model is good, planning keeps working.
+
 ## Setup and running
 
 ```bash
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m src.pets_train --no-video   # PETS
-.venv/bin/python -m src.ppo_train --no-video    # PPO baseline
+.venv/bin/python -m src.pets_train --no-video                     # PETS, state
+.venv/bin/python -m src.ppo_train  --no-video                     # PPO, state
+.venv/bin/python -m src.pets_train --obs-type pixels --no-video   # PETS, pixels
+.venv/bin/python -m src.ppo_train  --obs-type pixels --no-video   # PPO, pixels
 .venv/bin/python -m src.compare --plot          # rebuild the table and figure
 ```
 
 Run from the repo root. Every setting lives in `config/*.yaml`
 (`config/pets.yaml` and `config/ppo.yaml` both `inherit: base.yaml`, which is
-where the shared evaluation protocol is defined); the CLI flags in
-[src/cli.py](src/cli.py) are just per-run overrides of those keys. Training
-curves go to Weights & Biases (`--no-wandb` to disable).
+where the shared evaluation protocol is defined, and each carries a `pixels:`
+block that `--obs-type pixels` merges over the defaults); the CLI flags in
+[src/cli.py](src/cli.py) are just per-run overrides of those keys. Results land
+in `results/<algo>/<obs_type>/seed<n>/`. Training curves go to Weights & Biases
+(`--no-wandb` to disable).
 
 **Watching it:** `--watch --eval-episodes 1` renders the evaluation episodes live
 in a window while training proceeds. Dropping `--no-video` records clips instead
@@ -118,6 +171,12 @@ into `results/<algo>/seed<n>/videos/`, which wandb uploads automatically.
 - **Timed runs were run sequentially on an otherwise idle GPU.** An earlier pass
   that ran both concurrently inflated PPO's training time from 73.7 s to 201.4 s;
   co-tenancy distorts these two metrics badly.
-- Both curves are sampled every 200 env steps, but PETS' whole budget is 4,000
-  steps, so its curve has 20 points to PPO's 512.
-- The **known-reward assumption** above: PETS learns dynamics, not reward.
+- Curves are sampled every 200 env steps for the state runs; the pixel runs use
+  a coarser cadence (1,000 for PETS, 10,000 for PPO) because every eval step
+  also pays ~3 ms of rendering.
+- The **known-reward assumption** applies to the *state* agent only: it plans
+  with Pendulum's analytic reward and learns just the dynamics. The pixel agent
+  learns its reward too, from the rewards the env returns.
+- The pixel runs use grayscale frames. Stacking 3 RGB frames would give a
+  9-channel tensor that SB3's `CnnPolicy` rejects as an image, and Pendulum's
+  rendering carries no information in color.

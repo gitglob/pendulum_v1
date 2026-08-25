@@ -1,0 +1,204 @@
+{
+  "algo": "ppo",
+  "env_id": "Pendulum-v1",
+  "seed": 0,
+  "device": "cuda",
+  "obs_type": "pixels",
+  "total_env_steps": 301056,
+  "threshold": -200.0,
+  "env_steps_to_threshold": 50000,
+  "train_wall_clock_s": 1056.6265017967671,
+  "eval_wall_clock_s": 103.02453946694732,
+  "final_return_mean": -125.72470451208224,
+  "final_return_std": 87.23761754944307,
+  "final_return_episodes": 20,
+  "inference_ms_per_action": {
+    "mean": 0.7389756422489882,
+    "median": 0.6685385014861822,
+    "p95": 1.0705031687393785,
+    "n_actions": 1000
+  },
+  "learning_curve": [
+    {
+      "env_steps": 0,
+      "return_mean": -1052.5038929615964,
+      "return_std": 254.49749980623483
+    },
+    {
+      "env_steps": 10000,
+      "return_mean": -997.3124310659077,
+      "return_std": 162.55940313277466
+    },
+    {
+      "env_steps": 20000,
+      "return_mean": -904.7836506683695,
+      "return_std": 53.31599689541678
+    },
+    {
+      "env_steps": 30000,
+      "return_mean": -1026.110467449454,
+      "return_std": 17.615255909848344
+    },
+    {
+      "env_steps": 40000,
+      "return_mean": -540.4784587010929,
+      "return_std": 54.2069974416852
+    },
+    {
+      "env_steps": 50000,
+      "return_mean": -127.26917753747739,
+      "return_std": 79.68605833025849
+    },
+    {
+      "env_steps": 60000,
+      "return_mean": -127.31363602102734,
+      "return_std": 80.60908470810897
+    },
+    {
+      "env_steps": 70000,
+      "return_mean": -126.90477873080913,
+      "return_std": 80.0321034564698
+    },
+    {
+      "env_steps": 80000,
+      "return_mean": -128.03004257158454,
+      "return_std": 79.95566733013986
+    },
+    {
+      "env_steps": 90000,
+      "return_mean": -129.86404949257332,
+      "return_std": 81.18613596977889
+    },
+    {
+      "env_steps": 100000,
+      "return_mean": -129.92975339144178,
+      "return_std": 82.74723154268219
+    },
+    {
+      "env_steps": 110000,
+      "return_mean": -130.1171193364898,
+      "return_std": 83.22313815824846
+    },
+    {
+      "env_steps": 120000,
+      "return_mean": -129.7101606770052,
+      "return_std": 82.45963658540808
+    },
+    {
+      "env_steps": 130000,
+      "return_mean": -131.31444981142263,
+      "return_std": 83.09292159877744
+    },
+    {
+      "env_steps": 140000,
+      "return_mean": -921.3745805766209,
+      "return_std": 703.5181074466318
+    },
+    {
+      "env_steps": 150000,
+      "return_mean": -939.5883198718932,
+      "return_std": 717.9812113913173
+    },
+    {
+      "env_steps": 160000,
+      "return_mean": -836.5698213307293,
+      "return_std": 634.2289462101979
+    },
+    {
+      "env_steps": 170000,
+      "return_mean": -650.2087598876594,
+      "return_std": 483.02577041663926
+    },
+    {
+      "env_steps": 180000,
+      "return_mean": -125.72075951912802,
+      "return_std": 82.91065430593297
+    },
+    {
+      "env_steps": 190000,
+      "return_mean": -98.22050162704764,
+      "return_std": 49.01243839445635
+    },
+    {
+      "env_steps": 200000,
+      "return_mean": -98.78209269161816,
+      "return_std": 48.483649628879824
+    },
+    {
+      "env_steps": 210000,
+      "return_mean": -99.4772932194857,
+      "return_std": 48.836503250455635
+    },
+    {
+      "env_steps": 220000,
+      "return_mean": -124.90870900513315,
+      "return_std": 79.43619668441653
+    },
+    {
+      "env_steps": 230000,
+      "return_mean": -100.34280627782724,
+      "return_std": 49.946515025337185
+    },
+    {
+      "env_steps": 240000,
+      "return_mean": -99.02786659888852,
+      "return_std": 49.48161993932946
+    },
+    {
+      "env_steps": 250000,
+      "return_mean": -98.90067203869644,
+      "return_std": 49.45700522371247
+    },
+    {
+      "env_steps": 260000,
+      "return_mean": -99.88474567444148,
+      "return_std": 49.916560779031826
+    },
+    {
+      "env_steps": 270000,
+      "return_mean": -99.98835894042615,
+      "return_std": 49.98087272139071
+    },
+    {
+      "env_steps": 280000,
+      "return_mean": -99.6217874647742,
+      "return_std": 49.81879431391684
+    },
+    {
+      "env_steps": 290000,
+      "return_mean": -125.79115853626868,
+      "return_std": 79.90296322540384
+    },
+    {
+      "env_steps": 300000,
+      "return_mean": -100.03522038571751,
+      "return_std": 49.938772182383794
+    }
+  ],
+  "hyperparams": {
+    "policy": "CnnPolicy",
+    "n_steps": 512,
+    "gae_lambda": 0.95,
+    "gamma": 0.9,
+    "n_epochs": 10,
+    "ent_coef": 0.0,
+    "learning_rate": 0.0003,
+    "clip_range": 0.2,
+    "use_sde": false,
+    "sde_sample_freq": 4,
+    "total_env_steps": 300000,
+    "n_envs": 4,
+    "device": "cuda",
+    "type": "pixels",
+    "image_size": 64,
+    "grayscale": true,
+    "frame_stack": 3
+  },
+  "versions": {
+    "python": "3.10.12",
+    "torch": "2.13.0+cu130",
+    "gymnasium": "1.3.0",
+    "stable_baselines3": "2.9.0",
+    "numpy": "2.2.6"
+  }
+}

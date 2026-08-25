@@ -9,7 +9,8 @@ algo: pets
 
 train:
   total_env_steps: 4000
-  warmup_steps: 200     # uniform-random steps before the first model fit
+  warmup_steps: 200          # uniform-random steps before the first model fit
+  retrain_every_episodes: 1  # refit the model at every episode boundary
   device: cuda
 
 model:
@@ -20,6 +21,9 @@ model:
   batch_size: 256
   epochs_per_retrain: 50
   holdout_ratio: 0.1
+  # 1 = train on single-step prediction only. Planning cares about compounded
+  # error, so the pixel agent trains on rollouts instead (see its block).
+  rollout_horizon: 1
 
 planner:
   horizon: 15
@@ -38,6 +42,39 @@ eval:
 
 video:
   every_episodes: 5
+
+# Merged over everything above when --obs-type pixels is passed. Pixel PETS
+# plans in a learned latent space: the autoencoder compresses the frame stack,
+# the ensemble learns latent dynamics, and a head learns the reward from the
+# rewards the env already returns -- no privileged state anywhere.
+pixels:
+  model:
+    # Latent one-step error looks fine but compounds; train on rollouts so the
+    # model is optimised for the multi-step prediction the planner relies on.
+    rollout_horizon: 5
+  train:
+    total_env_steps: 15000
+    warmup_steps: 1000
+    # 75 episodes at 200 steps; refitting an autoencoder at every boundary
+    # would dominate wall-clock.
+    retrain_every_episodes: 5
+  encoder:
+    latent_dim: 32
+    channels: [32, 64, 64]
+    lr: 0.001
+    batch_size: 128
+    epochs_per_retrain: 30
+    reward_weight: 1.0     # weight of the reward loss against reconstruction
+    reward_hidden: [128, 128]
+    # Latent-prediction loss: without it the latent reconstructs well but is
+    # unpredictable, and the planner has nothing to rank plans by.
+    latent_weight: 1.0
+    transition_hidden: [128, 128]
+    # Jitter applied to latents when training the reward/transition heads, so
+    # they stay accurate on the imperfect latents a rollout actually produces.
+    latent_noise: 0.1
+  eval:
+    freq_env_steps: 1000
 
 output:
   dir: results/pets

@@ -23,6 +23,8 @@ class RunMetrics:
     env_id: str
     seed: int
     device: str
+    # "state" (the 3-d vector) or "pixels" (a stack of rendered frames)
+    obs_type: str
     total_env_steps: int
     threshold: float
     env_steps_to_threshold: int | None

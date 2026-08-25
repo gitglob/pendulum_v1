@@ -5,6 +5,17 @@
 env:
   id: Pendulum-v1
 
+obs:
+  # state  -> the 3-d vector [cos(theta), sin(theta), theta_dot]
+  # pixels -> a stack of rendered frames; select with --obs-type. Each algo
+  #           config carries a `pixels:` block that is merged in for that case.
+  type: state
+  image_size: 64
+  grayscale: true
+  # 3 frames: one fixes the angle, two give angular velocity, three give
+  # angular acceleration -- so the state is theoretically recoverable.
+  frame_stack: 3
+
 benchmark:
   # Mean eval return counted as "solved". Pendulum-v1 has no official
   # threshold; -200 is the commonly used bar.

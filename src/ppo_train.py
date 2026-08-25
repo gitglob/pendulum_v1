@@ -24,6 +24,7 @@ from .cli import build_parser, load_and_override
 from .config import resolve_device
 from .evaluate import benchmark_inference, evaluate, make_env
 from .metrics import PausableTimer, RunMetrics, collect_versions, steps_to_threshold
+from .obs import apply_pixel_wrappers, is_pixels, render_mode_for
 from .wandb_utils import finish_run, init_run, log_eval_point
 
 
@@ -73,20 +74,26 @@ def train_one_seed(config: dict[str, Any], seed: int) -> RunMetrics:
     device = resolve_device(config["train"]["device"])
     threshold = config["benchmark"]["threshold"]
 
-    print(f"[ppo] seed {seed}: training for {timesteps:,} env steps on {device}")
+    obs_type = config["obs"]["type"]
+    print(f"[ppo/{obs_type}] seed {seed}: training for {timesteps:,} env steps on {device}")
     set_random_seed(seed)
     run = init_run(config, seed)
 
-    run_dir = Path(config["output"]["dir"]) / f"seed{seed}"
+    run_dir = Path(config["output"]["dir"]) / obs_type / f"seed{seed}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     n_envs = config["train"]["n_envs"]
     record_video = config["video"]["enabled"] and config["video"]["every_env_steps"]
+    # Pixel runs must render to build their observations; video needs the same.
+    render_mode = render_mode_for(config, "rgb_array" if record_video else None)
     train_env = make_vec_env(
         config["env"]["id"],
         n_envs=n_envs,
         seed=seed,
-        env_kwargs={"render_mode": "rgb_array"} if record_video else None,
+        env_kwargs={"render_mode": render_mode} if render_mode else None,
+        wrapper_class=(
+            (lambda env: apply_pixel_wrappers(env, config)) if is_pixels(config) else None
+        ),
     )
     if record_video:
         # VecVideoRecorder counts vec-env steps, so divide by n_envs to trigger
@@ -134,6 +141,7 @@ def train_one_seed(config: dict[str, Any], seed: int) -> RunMetrics:
         env_id=config["env"]["id"],
         seed=seed,
         device=device,
+        obs_type=obs_type,
         total_env_steps=int(model.num_timesteps),
         threshold=threshold,
         env_steps_to_threshold=steps_to_threshold(callback.learning_curve, threshold),
@@ -144,7 +152,7 @@ def train_one_seed(config: dict[str, Any], seed: int) -> RunMetrics:
         final_return_episodes=config["eval"]["final_episodes"],
         inference_ms_per_action=inference,
         learning_curve=callback.learning_curve,
-        hyperparams={**config["hyperparams"], **config["train"]},
+        hyperparams={**config["hyperparams"], **config["train"], **config["obs"]},
         versions=collect_versions(),
     )
     metrics.save(run_dir / "metrics.json")
@@ -156,7 +164,7 @@ def train_one_seed(config: dict[str, Any], seed: int) -> RunMetrics:
 
     reached = metrics.env_steps_to_threshold
     print(
-        f"[ppo] seed {seed}: final return {final_mean:.1f} +/- {final_std:.1f} | "
+        f"[ppo/{obs_type}] seed {seed}: final return {final_mean:.1f} +/- {final_std:.1f} | "
         f"train {train_wall_clock_s:.1f}s (eval overhead {timer.paused_s:.1f}s) | "
         f"threshold {threshold:g} at "
         + (f"{reached:,} steps" if reached is not None else "NOT REACHED")

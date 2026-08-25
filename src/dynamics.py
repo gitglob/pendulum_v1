@@ -13,7 +13,7 @@ launches would dominate the runtime.
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import torch
@@ -62,14 +62,20 @@ class ProbabilisticEnsemble(nn.Module):
         config: the `model` block of the YAML config -- `ensemble_size` and
             `hidden_layers` are read here, the training keys in `train_model`.
         device: torch device string the whole ensemble lives on.
+        projection: optional map applied to every predicted next state during
+            planning rollouts, used to keep them on the manifold the model was
+            trained on. The pixel agent passes LayerNorm, matching how its
+            encoder produces latents; the state agent needs none.
     """
 
-    def __init__(self, obs_dim: int, act_dim: int, config: dict[str, Any], device: str):
+    def __init__(self, obs_dim: int, act_dim: int, config: dict[str, Any], device: str,
+                 projection: Callable[[torch.Tensor], torch.Tensor] | None = None):
         super().__init__()
         self.obs_dim = obs_dim
         self.act_dim = act_dim
         self.n_members = config["ensemble_size"]
         self.device = device
+        self.projection = projection
 
         layers: list[nn.Module] = []
         in_dim = obs_dim + act_dim
@@ -138,7 +144,11 @@ class ProbabilisticEnsemble(nn.Module):
         """
         mean, logvar = self(obs, act)
         delta = mean + torch.randn_like(mean) * logvar.exp().sqrt()
-        return obs + delta
+        next_obs = obs + delta
+        # Keep long rollouts on the manifold the model was trained on. Without
+        # this the pixel agent's latent rollout error grew from 0.003 at one
+        # step to ~3500 by fifteen, which left the planner ranking noise.
+        return self.projection(next_obs) if self.projection else next_obs
 
     def _nll_loss(
         self, obs: torch.Tensor, act: torch.Tensor, target: torch.Tensor
@@ -182,6 +192,72 @@ class ProbabilisticEnsemble(nn.Module):
         return float(((mean.mean(dim=0) - target[0]) ** 2).mean())
 
 
+def _rollout_starts(
+    n: int, horizon: int, episode_ends: np.ndarray | None, device: str
+) -> torch.Tensor:
+    """Indices from which `horizon` steps stay inside a single episode."""
+    if horizon <= 1:
+        return torch.empty(0, dtype=torch.long, device=device)
+
+    valid = np.ones(n, dtype=bool)
+    valid[max(0, n - horizon - 1) :] = False
+    if episode_ends is not None:
+        # Drop any start whose window would step across a reset.
+        ends = np.flatnonzero(episode_ends[:n])
+        for offset in range(horizon):
+            crossing = ends - offset
+            valid[crossing[crossing >= 0]] = False
+    return torch.as_tensor(np.flatnonzero(valid), dtype=torch.long, device=device)
+
+
+def multi_step_loss(
+    model: ProbabilisticEnsemble,
+    obs_t: torch.Tensor,
+    act_t: torch.Tensor,
+    starts: torch.Tensor,
+    horizon: int,
+) -> torch.Tensor:
+    """NLL of a `horizon`-step rollout, not just of one step.
+
+    One-step accuracy is a poor proxy for what a planner needs. Measured on the
+    pixel agent: a model with a one-step error of 0.003 drifted to 0.34 by
+    fifteen steps, and its predicted returns correlated with the truth at 0.02
+    -- planning on noise. Rolling the model out during training penalises the
+    compounding directly.
+
+    Args:
+        model: the ensemble being trained.
+        obs_t: all states in temporal order, [n, dim].
+        act_t: the action taken at each, [n, act_dim].
+        starts: indices to roll out from, [batch]; callers must guarantee
+            `start + horizon` stays inside one episode.
+        horizon: number of steps to unroll.
+
+    Returns:
+        Scalar loss, summed over members and averaged over steps.
+    """
+    members = model.n_members
+    # [members, batch, dim] -- every member rolls out the same starts.
+    state = obs_t[starts].unsqueeze(0).expand(members, -1, -1).contiguous()
+    loss = torch.zeros((), device=obs_t.device)
+
+    for step in range(horizon):
+        idx = starts + step
+        act = act_t[idx].unsqueeze(0).expand(members, -1, -1).contiguous()
+        mean, logvar = model(state, act)
+        target = (obs_t[idx + 1] - obs_t[idx]).unsqueeze(0)
+
+        inv_var = torch.exp(-logvar)
+        loss = loss + (((mean - target) ** 2) * inv_var + logvar).mean(dim=(1, 2)).sum()
+
+        # Feed the model its own prediction, which is what planning will do.
+        state = state + mean
+        if model.projection is not None:
+            state = model.projection(state)
+
+    return loss / horizon + 0.01 * (model.max_logvar.sum() - model.min_logvar.sum())
+
+
 def train_model(
     model: ProbabilisticEnsemble,
     obs: np.ndarray,
@@ -189,6 +265,7 @@ def train_model(
     next_obs: np.ndarray,
     config: dict[str, Any],
     generator: torch.Generator,
+    episode_ends: np.ndarray | None = None,
 ) -> dict[str, float]:
     """Refit the ensemble on the whole buffer; returns losses for logging.
 
@@ -229,6 +306,11 @@ def train_model(
     )
 
     batch_size = min(config["batch_size"], n_train)
+    horizon = config.get("rollout_horizon", 1)
+    # Rollout training needs contiguous transitions, so it draws its own starts
+    # rather than using the shuffled bootstrap indices.
+    rollout_starts = _rollout_starts(n, horizon, episode_ends, device)
+
     final_loss = 0.0
     for _ in range(config["epochs_per_retrain"]):
         # Independent bootstrap resample per member, reshuffled every epoch.
@@ -238,6 +320,16 @@ def train_model(
         for start in range(0, n_train, batch_size):
             idx = train_idx[boot[:, start : start + batch_size]]
             loss = model._nll_loss(obs_t[idx], act_t[idx], target_t[idx])
+
+            if horizon > 1 and rollout_starts.numel():
+                pick = torch.randint(
+                    rollout_starts.numel(), (batch_size,),
+                    generator=generator, device=device,
+                )
+                loss = loss + multi_step_loss(
+                    model, obs_t, act_t, rollout_starts[pick], horizon
+                )
+
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()

@@ -29,5 +29,18 @@ hyperparams:
   use_sde: true
   sde_sample_freq: 4
 
+# Merged over everything above when --obs-type pixels is passed.
+pixels:
+  train:
+    # Vision needs far more samples, and every step also pays ~3 ms of render.
+    total_env_steps: 300000
+  hyperparams:
+    policy: CnnPolicy      # SB3's NatureCNN over the (3, 64, 64) frame stack
+    n_steps: 512
+    learning_rate: 0.0003  # 1e-3 is too hot for a conv net
+    use_sde: false         # gSDE is a state-space trick; plain Gaussian noise here
+  eval:
+    freq_env_steps: 10000  # eval steps pay the render cost too
+
 output:
   dir: results/ppo

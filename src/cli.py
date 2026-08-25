@@ -11,12 +11,18 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-from .config import load_config
+from .config import deep_merge, load_config
+from .obs import PIXELS, STATE
 
 
 def build_parser(description: str, default_config: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--config", type=Path, default=Path(default_config))
+    parser.add_argument(
+        "--obs-type",
+        choices=[STATE, PIXELS],
+        help="observation the agent learns from (default: obs.type in the config)",
+    )
     parser.add_argument(
         "--timesteps", type=int, help="override train.total_env_steps (for smoke tests)"
     )
@@ -46,6 +52,14 @@ def build_parser(description: str, default_config: str) -> argparse.ArgumentPars
 def load_and_override(args: argparse.Namespace) -> dict[str, Any]:
     """Load the config named by `--config` and apply the flag overrides."""
     config = load_config(args.config)
+
+    if args.obs_type is not None:
+        config["obs"]["type"] = args.obs_type
+    # The algo config carries its pixel settings in a `pixels:` block; fold it in
+    # before the remaining flags, so an explicit flag still wins over it.
+    pixel_overrides = config.pop(PIXELS, {})
+    if config["obs"]["type"] == PIXELS:
+        config = deep_merge(config, pixel_overrides)
 
     if args.timesteps is not None:
         config["train"]["total_env_steps"] = args.timesteps

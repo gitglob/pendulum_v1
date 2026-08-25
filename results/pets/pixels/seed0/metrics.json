@@ -1,0 +1,155 @@
+{
+  "algo": "pets",
+  "env_id": "Pendulum-v1",
+  "seed": 0,
+  "device": "cuda",
+  "obs_type": "pixels",
+  "total_env_steps": 15000,
+  "threshold": -200.0,
+  "env_steps_to_threshold": 9000,
+  "train_wall_clock_s": 870.1607675454579,
+  "eval_wall_clock_s": 649.3522850195877,
+  "final_return_mean": -129.52967276842645,
+  "final_return_std": 89.73038546089533,
+  "final_return_episodes": 20,
+  "inference_ms_per_action": {
+    "mean": 39.10990568669513,
+    "median": 39.04133941978216,
+    "p95": 39.82727178372443,
+    "n_actions": 1000
+  },
+  "learning_curve": [
+    {
+      "env_steps": 0,
+      "return_mean": -1255.561156554882,
+      "return_std": 166.85424164256307
+    },
+    {
+      "env_steps": 1000,
+      "return_mean": -1263.0303137902986,
+      "return_std": 151.53469831914086
+    },
+    {
+      "env_steps": 2000,
+      "return_mean": -1496.348283324331,
+      "return_std": 220.93839219071145
+    },
+    {
+      "env_steps": 3000,
+      "return_mean": -1130.7257132577886,
+      "return_std": 134.33467386593708
+    },
+    {
+      "env_steps": 4000,
+      "return_mean": -992.0139091987719,
+      "return_std": 71.64392377305792
+    },
+    {
+      "env_steps": 5000,
+      "return_mean": -1223.5567766295537,
+      "return_std": 249.321351439827
+    },
+    {
+      "env_steps": 6000,
+      "return_mean": -818.6549192374962,
+      "return_std": 59.63514465052408
+    },
+    {
+      "env_steps": 7000,
+      "return_mean": -795.7657971266653,
+      "return_std": 87.73129932065665
+    },
+    {
+      "env_steps": 8000,
+      "return_mean": -299.2443373719626,
+      "return_std": 160.69689004351096
+    },
+    {
+      "env_steps": 9000,
+      "return_mean": -125.78811091044574,
+      "return_std": 78.71062068517473
+    },
+    {
+      "env_steps": 10000,
+      "return_mean": -124.1602401722906,
+      "return_std": 78.59248267215374
+    },
+    {
+      "env_steps": 11000,
+      "return_mean": -124.12633670524471,
+      "return_std": 78.20131167834414
+    },
+    {
+      "env_steps": 12000,
+      "return_mean": -124.01514946054071,
+      "return_std": 78.30220826592003
+    },
+    {
+      "env_steps": 13000,
+      "return_mean": -124.87588319065631,
+      "return_std": 78.62232087673164
+    },
+    {
+      "env_steps": 14000,
+      "return_mean": -124.27201367469465,
+      "return_std": 78.55580347856065
+    },
+    {
+      "env_steps": 15000,
+      "return_mean": -124.48197162035001,
+      "return_std": 78.06340072794302
+    }
+  ],
+  "hyperparams": {
+    "ensemble_size": 5,
+    "hidden_layers": [
+      200,
+      200
+    ],
+    "lr": 0.001,
+    "weight_decay": 5e-05,
+    "batch_size": 128,
+    "epochs_per_retrain": 30,
+    "holdout_ratio": 0.1,
+    "rollout_horizon": 5,
+    "horizon": 15,
+    "popsize": 500,
+    "elites": 50,
+    "iters": 5,
+    "alpha": 0.1,
+    "n_particles": 20,
+    "warm_start": true,
+    "total_env_steps": 15000,
+    "warmup_steps": 1000,
+    "retrain_every_episodes": 5,
+    "device": "cuda",
+    "latent_dim": 32,
+    "channels": [
+      32,
+      64,
+      64
+    ],
+    "reward_weight": 1.0,
+    "reward_hidden": [
+      128,
+      128
+    ],
+    "latent_weight": 1.0,
+    "transition_hidden": [
+      128,
+      128
+    ],
+    "latent_noise": 0.1,
+    "type": "pixels",
+    "image_size": 64,
+    "grayscale": true,
+    "frame_stack": 3
+  },
+  "versions": {
+    "python": "3.10.12",
+    "torch": "2.13.0+cu130",
+    "gymnasium": "1.3.0",
+    "stable_baselines3": "2.9.0",
+    "numpy": "2.2.6"
+  }
+}

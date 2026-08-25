@@ -4,14 +4,17 @@ At every environment step the planner searches for an action sequence that
 maximises predicted return under the learned dynamics, executes only the first
 action, and re-plans at the next step.
 
-Only the dynamics are learned; the reward is Pendulum's known analytic reward
-(see `pendulum_reward`). That is the standard setup for PETS on these
-benchmarks and it is stated as an assumption in the README.
+The planner is agnostic to what it plans *in*: the state agent rolls out
+observations and scores them with Pendulum's known analytic reward
+(`pendulum_reward`, the standard setup for PETS on these benchmarks, stated as
+an assumption in the README), while the pixel agent rolls out autoencoder
+latents and scores them with a learned reward head. Both arrive here as a
+`reward_fn` handed to `CEMPlanner`.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import torch
@@ -39,7 +42,20 @@ def pendulum_reward(
 
 
 class CEMPlanner:
-    """Cross-entropy-method planner over open-loop action sequences."""
+    """Cross-entropy-method planner over open-loop action sequences.
+
+    Args:
+        model: dynamics the plans are rolled out through. It works in whatever
+            space the caller trained it on -- observations for the state agent,
+            autoencoder latents for the pixel agent.
+        config: full config; the `planner` block is read here.
+        action_low / action_high: bounds candidate actions are clipped to.
+        seed: seeds this planner's own RNG, so CEM sampling is reproducible
+            without disturbing the exploration or model-training streams.
+        reward_fn: scores `(state, action)` for imagined states, returning one
+            reward per row. `pendulum_reward` for the state agent; the learned
+            reward head for the pixel agent, which has no angle to read.
+    """
 
     def __init__(
         self,
@@ -48,8 +64,10 @@ class CEMPlanner:
         action_low: float,
         action_high: float,
         seed: int,
+        reward_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     ):
         self.model = model
+        self.reward_fn = reward_fn
         self.device = model.device
         planner_config = config["planner"]
         self.horizon = planner_config["horizon"]
@@ -110,7 +128,7 @@ class CEMPlanner:
         for t in range(self.horizon):
             act = expanded[:, :, t]
             # Reward depends on the pre-transition state, so score then step.
-            returns += pendulum_reward(state, act, self.max_torque)
+            returns += self.reward_fn(state, act)
             state = self.model.propagate(state, act)
 
         return returns.reshape(self.n_particles, self.popsize).mean(dim=0)

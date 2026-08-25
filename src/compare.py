@@ -19,18 +19,28 @@ import numpy as np
 from .config import load_config
 from .metrics import RunMetrics
 
-# Algorithms in report order: the model-based agent is the subject, PPO is the
-# baseline it is measured against.
-ALGO_LABELS = {"pets": "PETS (model-based)", "ppo": "PPO (model-free)"}
+# Report order: the model-based agent is the subject, PPO is the baseline it is
+# measured against, and state comes before pixels within each.
+ALGO_LABELS = {
+    ("pets", "state"): "PETS (state)",
+    ("ppo", "state"): "PPO (state)",
+    ("pets", "pixels"): "PETS (pixels)",
+    ("ppo", "pixels"): "PPO (pixels)",
+}
+Key = tuple[str, str]
 
 
-def load_runs(results_root: Path) -> dict[str, list[RunMetrics]]:
-    """Group every metrics.json under `results_root` by algorithm."""
-    runs: dict[str, list[RunMetrics]] = {}
-    for path in sorted(results_root.glob("*/seed*/metrics.json")):
+def load_runs(results_root: Path) -> dict[Key, list[RunMetrics]]:
+    """Group every metrics.json under `results_root` by (algo, obs_type)."""
+    runs: dict[Key, list[RunMetrics]] = {}
+    for path in sorted(results_root.glob("*/*/seed*/metrics.json")):
         metrics = RunMetrics.load(path)
-        runs.setdefault(metrics.algo, []).append(metrics)
+        runs.setdefault((metrics.algo, metrics.obs_type), []).append(metrics)
     return runs
+
+
+def _label(key: Key) -> str:
+    return ALGO_LABELS.get(key, f"{key[0]} ({key[1]})")
 
 
 def _agg(values: list[float], fmt: str) -> str:
@@ -49,7 +59,7 @@ def _steps_to_threshold(runs: list[RunMetrics]) -> str:
     return _agg([float(s) for s in reached], ",.0f") + suffix
 
 
-def build_table(runs: dict[str, list[RunMetrics]]) -> str:
+def build_table(runs: dict[Key, list[RunMetrics]]) -> str:
     algos = [a for a in ALGO_LABELS if a in runs] + [a for a in runs if a not in ALGO_LABELS]
     if not algos:
         return "No runs found."
@@ -72,7 +82,7 @@ def build_table(runs: dict[str, list[RunMetrics]]) -> str:
         ("Seeds", lambda rs: str(len(rs))),
     ]
 
-    header = "| Metric | " + " | ".join(ALGO_LABELS.get(a, a) for a in algos) + " |"
+    header = "| Metric | " + " | ".join(_label(a) for a in algos) + " |"
     divider = "| --- | " + " | ".join("---" for _ in algos) + " |"
     lines = [header, divider]
     for label, fn in rows:
@@ -80,7 +90,9 @@ def build_table(runs: dict[str, list[RunMetrics]]) -> str:
     return "\n".join(lines)
 
 
-def plot_curves(runs: dict[str, list[RunMetrics]], out_path: Path) -> None:
+def plot_curves(
+    runs: dict[Key, list[RunMetrics]], out_path: Path, zoom: int | None = None
+) -> None:
     """Sample-efficiency plot: return vs REAL env steps, the headline claim."""
     import matplotlib
 
@@ -88,10 +100,13 @@ def plot_curves(runs: dict[str, list[RunMetrics]], out_path: Path) -> None:
     import matplotlib.pyplot as plt
 
     # When the budgets differ by a lot, a single x-axis squashes the
-    # sample-efficient agent against the origin -- add a zoom panel.
+    # sample-efficient agents against the origin -- add a zoom panel. Its limit
+    # is the largest budget still small enough to be crushed on the full axis,
+    # so every such run stays fully visible rather than only the smallest.
     budgets = [max(p["env_steps"] for p in r.learning_curve)
                for rs in runs.values() for r in rs]
-    zoom_limit = min(budgets) if max(budgets) > 5 * min(budgets) else None
+    small = [b for b in budgets if b <= 0.2 * max(budgets)]
+    zoom_limit = zoom or (max(small) if small else None)
 
     n_panels = 2 if zoom_limit else 1
     fig, axes = plt.subplots(
@@ -107,7 +122,7 @@ def plot_curves(runs: dict[str, list[RunMetrics]], out_path: Path) -> None:
                 steps = [p["env_steps"] for p in run.learning_curve]
                 means = [p["return_mean"] for p in run.learning_curve]
                 stds = [p["return_std"] for p in run.learning_curve]
-                label = ALGO_LABELS.get(algo, algo) if i == 0 else None
+                label = _label(algo) if i == 0 else None
                 ax.plot(steps, means, label=label)
                 ax.fill_between(
                     steps, np.subtract(means, stds), np.add(means, stds), alpha=0.15
@@ -133,6 +148,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("config/base.yaml"))
     parser.add_argument("--plot", type=Path, nargs="?", const=Path("results/learning_curves.png"))
+    parser.add_argument(
+        "--zoom", type=int, help="x-limit of the zoom panel (default: auto)"
+    )
     args = parser.parse_args()
 
     results_root = Path(load_config(args.config)["output"]["root"])
@@ -143,7 +161,7 @@ def main() -> None:
 
     print(build_table(runs))
     if args.plot is not None:
-        plot_curves(runs, args.plot)
+        plot_curves(runs, args.plot, args.zoom)
 
 
 if __name__ == "__main__":
